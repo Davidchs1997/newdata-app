@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 
 export default function UploadPage() {
+  const [file, setFile] = useState<File | null>(null);
   const [cleanedData, setCleanedData] = useState<any[][] | null>(null);
   const [fileName, setFileName] = useState<string>("");
 
@@ -14,31 +15,33 @@ export default function UploadPage() {
     );
   };
 
-  const handleFileUpload = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0];
+    if (!selected) return;
+    setFile(selected);
+    setFileName(selected.name);
+  };
 
-    setFileName(file.name);
+  const handleFileUpload = () => {
+    if (!file) return;
 
     const reader = new FileReader();
 
     reader.onload = (e) => {
       const fileData = e.target?.result;
-      const fileExtension = file.name.split(".").pop()?.toLowerCase();
+      const ext = file.name.split(".").pop()?.toLowerCase();
 
-      if (fileExtension === "csv") {
+      if (ext === "csv") {
         const parsed = Papa.parse(fileData as string, { skipEmptyLines: true });
         const cleaned = cleanData(parsed.data as any[][]);
         setCleanedData(cleaned);
-      } else if (["xlsx", "xls"].includes(fileExtension || "")) {
+      } else if (["xlsx", "xls"].includes(ext || "")) {
         const workbook = XLSX.read(fileData, { type: "binary" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const parsed = XLSX.utils.sheet_to_json(sheet, { header: 1 });
         const cleaned = cleanData(parsed as any[][]);
         setCleanedData(cleaned);
-      } else if (fileExtension === "json") {
+      } else if (ext === "json") {
         const json = JSON.parse(fileData as string);
         if (Array.isArray(json)) {
           const cleaned = cleanData(json);
@@ -70,24 +73,22 @@ export default function UploadPage() {
     <div className="p-4 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Upload & Clean your File</h1>
 
-      {/* Este es el nuevo botón que querías */}
-      <Button className="mb-4" onClick={() => document.getElementById("fileInput")?.click()}>
-        Upload File
-      </Button>
-
       <input
-        id="fileInput"
         type="file"
         accept=".csv,.xlsx,.xls,.json"
-        onChange={handleFileUpload}
-        className="hidden"
+        onChange={handleFileChange}
+        className="mb-2"
       />
+
+      {file && (
+        <Button className="mb-4" onClick={handleFileUpload}>
+          Upload
+        </Button>
+      )}
 
       {cleanedData && (
         <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-2">
-            Preview (First 10 rows)
-          </h2>
+          <h2 className="text-xl font-semibold mb-2">Preview (First 10 rows)</h2>
           <div className="overflow-x-auto border rounded">
             <table className="min-w-full text-sm">
               <tbody>
@@ -95,9 +96,7 @@ export default function UploadPage() {
                   <tr key={rowIndex} className="border-b">
                     {row.map((cell, colIndex) => (
                       <td key={colIndex} className="p-2 border-r">
-                        {typeof cell === "object"
-                          ? JSON.stringify(cell)
-                          : cell}
+                        {typeof cell === "object" ? JSON.stringify(cell) : cell}
                       </td>
                     ))}
                   </tr>
