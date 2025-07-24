@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.2.3",
     "autoprefixer": "^10.4.14",
     "next": "13.4.7",
     "postcss": "^8.4.21",
