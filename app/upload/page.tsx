@@ -69,11 +69,18 @@ export default function UploadPage() {
   return (
     <div className="p-4 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Upload & Clean your File</h1>
+
+      {/* Este es el nuevo botón que querías */}
+      <Button className="mb-4" onClick={() => document.getElementById("fileInput")?.click()}>
+        Upload File
+      </Button>
+
       <input
+        id="fileInput"
         type="file"
         accept=".csv,.xlsx,.xls,.json"
         onChange={handleFileUpload}
-        className="mb-4"
+        className="hidden"
       />
 
       {cleanedData && (
