@@ -1,186 +1,164 @@
 'use client';
-import React, { useState } from "react";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
-import { Button } from "@/components/ui/button";
+
+import React, { useState } from 'react';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import { Chart } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  ArcElement,
+  PointElement,
+  LineElement
+} from 'chart.js';
+
+ChartJS.register(
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  ArcElement,
+  PointElement,
+  LineElement
+);
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [fileName, setFileName] = useState<string>("");
-  const [cleanedData, setCleanedData] = useState<any[][] | null>(null);
-  const [options, setOptions] = useState({
-    removeEmpty: true,
-    removeDuplicates: true,
-    removeIncompleteRows: true,
-  });
+  const [removeEmpty, setRemoveEmpty] = useState(true);
+  const [removeDuplicates, setRemoveDuplicates] = useState(true);
+  const [removeIncomplete, setRemoveIncomplete] = useState(true);
+  const [downloadTrash, setDownloadTrash] = useState(false);
+  const [includeStats, setIncludeStats] = useState(false);
+  const [includeBarChart, setIncludeBarChart] = useState(false);
+  const [includePieChart, setIncludePieChart] = useState(false);
+  const [includeScatterPlot, setIncludeScatterPlot] = useState(false);
 
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setOptions((prev) => ({ ...prev, [name]: checked }));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) setFile(e.target.files[0]);
   };
 
-  const cleanData = (data: any[][]): any[][] => {
-    let cleaned = [...data];
-
-    if (options.removeEmpty) {
-      cleaned = cleaned.filter((row) =>
-        row.some((cell) => cell !== null && cell !== undefined && cell !== "")
-      );
-    }
-
-    if (options.removeDuplicates) {
-      const seen = new Set();
-      cleaned = cleaned.filter((row) => {
-        const key = JSON.stringify(row);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    }
-
-    if (options.removeIncompleteRows) {
-      const headers = cleaned[0];
-      cleaned = cleaned.filter(
-        (row, i) =>
-          i === 0 || (row.length === headers.length && !row.includes(""))
-      );
-    }
-
-    return cleaned;
-  };
-
-  const handleFileSelect = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const selectedFile = event.target.files?.[0];
-    if (!selectedFile) return;
-    setFile(selectedFile);
-    setFileName(selectedFile.name);
-    setCleanedData(null);
-  };
-
-  const handleUpload = () => {
+  const cleanAndExport = () => {
     if (!file) return;
 
-    const reader = new FileReader();
-    const extension = file.name.split(".").pop()?.toLowerCase();
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: function (results) {
+        let data = results.data as any[];
+        const trash: any[] = [];
 
-    reader.onload = (e) => {
-      const result = e.target?.result;
-      let data: any[][] = [];
+        // Trash copy before any filtering
+        let originalData = [...data];
 
-      if (extension === "csv") {
-        const parsed = Papa.parse(result as string, { skipEmptyLines: true });
-        data = parsed.data as any[][];
-      } else if (["xlsx", "xls"].includes(extension || "")) {
-        const workbook = XLSX.read(result, { type: "binary" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-      } else if (extension === "json") {
-        const json = JSON.parse(result as string);
-        if (Array.isArray(json)) data = json;
+        // Remove empty rows
+        if (removeEmpty) {
+          data = data.filter(row =>
+            Object.values(row).some(val => val !== null && val !== '')
+          );
+        }
+
+        // Remove duplicates
+        if (removeDuplicates) {
+          const unique = new Set();
+          data = data.filter(row => {
+            const serialized = JSON.stringify(row);
+            if (unique.has(serialized)) {
+              trash.push(row);
+              return false;
+            }
+            unique.add(serialized);
+            return true;
+          });
+        }
+
+        // Remove incomplete rows
+        if (removeIncomplete) {
+          data = data.filter(row => {
+            const hasAll = Object.values(row).every(val => val !== '');
+            if (!hasAll) trash.push(row);
+            return hasAll;
+          });
+        }
+
+        // Save Trash if requested
+        if (downloadTrash && trash.length > 0) {
+          const trashSheet = XLSX.utils.json_to_sheet(trash);
+          const trashWorkbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(trashWorkbook, trashSheet, 'Trash');
+          const trashBlob = XLSX.write(trashWorkbook, { bookType: 'xlsx', type: 'array' });
+          saveAs(new Blob([trashBlob]), 'trash_data.xlsx');
+        }
+
+        // Compute statistics
+        const stats: any = {};
+        const numericKeys = Object.keys(data[0]).filter(key =>
+          !isNaN(Number(data[0][key]))
+        );
+
+        if (includeStats && numericKeys.length > 0) {
+          numericKeys.forEach(key => {
+            const values = data.map(row => Number(row[key])).filter(v => !isNaN(v));
+            stats[key] = {
+              mean: values.reduce((a, b) => a + b, 0) / values.length,
+              median: values.sort((a, b) => a - b)[Math.floor(values.length / 2)],
+              min: Math.min(...values),
+              max: Math.max(...values),
+              stdDev: Math.sqrt(values.reduce((a, b) => a + Math.pow(b - (values.reduce((a, b) => a + b, 0) / values.length), 2), 0) / values.length),
+              unique: new Set(values).size
+            };
+          });
+        }
+
+        // Export Excel
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Cleaned Data');
+
+        if (includeStats) {
+          const statsSheet = XLSX.utils.json_to_sheet(
+            Object.entries(stats).map(([k, v]) => ({ column: k, ...v }))
+          );
+          XLSX.utils.book_append_sheet(wb, statsSheet, 'Statistics');
+        }
+
+        const excelBlob = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        saveAs(new Blob([excelBlob]), 'cleaned_data.xlsx');
       }
-
-      const cleaned = cleanData(data);
-      setCleanedData(cleaned);
-    };
-
-    if (["xlsx", "xls"].includes(extension || "")) {
-      reader.readAsBinaryString(file);
-    } else {
-      reader.readAsText(file);
-    }
-  };
-
-  const downloadCleanedFile = () => {
-    if (!cleanedData) return;
-    const worksheet = XLSX.utils.aoa_to_sheet(cleanedData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Cleaned Data");
-    XLSX.writeFile(workbook, `cleaned_${fileName}`);
+    });
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-4 text-center">📊 Upload & Clean your Data</h1>
+    <div className="p-10 min-h-screen bg-gray-100">
+      <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
+        📊 Upload & Clean your Data
+      </h1>
 
-      <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-        <input
-          type="file"
-          accept=".csv,.xlsx,.xls,.json"
-          onChange={handleFileSelect}
-          className="mb-4"
-        />
+      <input
+        type="file"
+        accept=".csv"
+        onChange={handleFileChange}
+        className="mb-4"
+      />
 
-        <div className="flex flex-col md:flex-row md:space-x-6 mb-4">
-          <label className="flex items-center mb-2 md:mb-0">
-            <input
-              type="checkbox"
-              name="removeEmpty"
-              checked={options.removeEmpty}
-              onChange={handleCheckboxChange}
-              className="mr-2"
-            />
-            Remove Empty Rows
-          </label>
-
-          <label className="flex items-center mb-2 md:mb-0">
-            <input
-              type="checkbox"
-              name="removeDuplicates"
-              checked={options.removeDuplicates}
-              onChange={handleCheckboxChange}
-              className="mr-2"
-            />
-            Remove Duplicate Rows
-          </label>
-
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              name="removeIncompleteRows"
-              checked={options.removeIncompleteRows}
-              onChange={handleCheckboxChange}
-              className="mr-2"
-            />
-            Remove Incomplete Rows
-          </label>
-        </div>
-
-        <Button
-          onClick={handleUpload}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          Upload & Clean
-        </Button>
+      <div className="space-y-2 mb-6">
+        <label><input type="checkbox" checked={removeEmpty} onChange={e => setRemoveEmpty(e.target.checked)} /> Remove Empty Rows</label><br />
+        <label><input type="checkbox" checked={removeDuplicates} onChange={e => setRemoveDuplicates(e.target.checked)} /> Remove Duplicate Rows</label><br />
+        <label><input type="checkbox" checked={removeIncomplete} onChange={e => setRemoveIncomplete(e.target.checked)} /> Remove Incomplete Rows</label><br />
+        <label><input type="checkbox" checked={downloadTrash} onChange={e => setDownloadTrash(e.target.checked)} /> Download Trash (Deleted Rows)</label><br />
+        <label><input type="checkbox" checked={includeStats} onChange={e => setIncludeStats(e.target.checked)} /> Include Statistical Analysis</label><br />
+        <label><input type="checkbox" checked={includeBarChart} onChange={e => setIncludeBarChart(e.target.checked)} /> Generate Bar Chart</label><br />
+        <label><input type="checkbox" checked={includePieChart} onChange={e => setIncludePieChart(e.target.checked)} /> Generate Pie Chart</label><br />
+        <label><input type="checkbox" checked={includeScatterPlot} onChange={e => setIncludeScatterPlot(e.target.checked)} /> Generate Scatter Plot</label>
       </div>
 
-      {cleanedData && (
-        <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-2">🔍 Preview (First 10 Rows)</h2>
-          <div className="overflow-x-auto border rounded">
-            <table className="min-w-full text-sm">
-              <tbody>
-                {cleanedData.slice(0, 10).map((row, rowIndex) => (
-                  <tr key={rowIndex} className="border-b">
-                    {row.map((cell, colIndex) => (
-                      <td key={colIndex} className="p-2 border-r">
-                        {typeof cell === "object" ? JSON.stringify(cell) : cell}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Button
-            className="mt-4 bg-green-600 hover:bg-green-700 text-white"
-            onClick={downloadCleanedFile}
-          >
-            Download Cleaned File
-          </Button>
-        </div>
-      )}
+      <button
+        onClick={cleanAndExport}
+        className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+      >
+        Upload & Clean
+      </button>
     </div>
   );
 }
