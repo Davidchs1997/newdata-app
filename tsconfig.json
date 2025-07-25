@@ -17,8 +17,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
-    "downlevelIteration": true,
     "incremental": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
     "plugins": [
       {
         "name": "next"
@@ -33,5 +37,10 @@
   ],
   "exclude": [
     "node_modules"
+  ],
+  "plugins": [
+    {
+      "name": "next"
+    }
   ]
 }
