@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { hash } from 'bcryptjs'
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   try {
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 })
     }
 
-    // Revisar si ya existe el usuario
+    // Verificar si el usuario ya existe
     const existingUser = await prisma.user.findUnique({
       where: { email },
     })
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     // Encriptar la contraseña
     const hashedPassword = await hash(password, 10)
 
-    // Crear nuevo usuario
+    // Crear el nuevo usuario
     const newUser = await prisma.user.create({
       data: {
         email,
@@ -32,7 +32,10 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({ message: 'User created successfully.', user: newUser }, { status: 201 })
+    return NextResponse.json(
+      { message: 'User created successfully.', user: { id: newUser.id, email: newUser.email } },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('[REGISTER_POST_ERROR]', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
