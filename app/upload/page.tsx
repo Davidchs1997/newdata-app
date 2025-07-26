@@ -1,205 +1,217 @@
-'use client';
-import React, { useState } from 'react';
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
+'use client'
+import React, { useState } from 'react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
+import Papa from 'papaparse'
+import JSZip from 'jszip'
+import FileSaver from 'file-saver'
 
 export default function UploadPage() {
-  const [data, setData] = useState<any[][] | null>(null);
-  const [fileName, setFileName] = useState('');
+  const [file, setFile] = useState<File | null>(null)
   const [options, setOptions] = useState({
     removeDuplicates: false,
     removeEmptyRows: false,
-    analyzeStatistics: false,
+    removeEmptyColumns: false,
+    dropNulls: false,
     downloadTrash: false,
-  });
+    analyzeStatistics: {
+      enabled: false,
+      countRowsCols: false,
+      uniqueValues: false,
+      statsSummary: false,
+      detectNullsOutliers: false,
+      showSummary: false,
+      exportStats: false
+    },
+    generateCharts: false,
+    normalizeData: false,
+    encodeCategorical: false,
+    transformText: false
+  })
 
-  const [trash, setTrash] = useState<any[][]>([]);
-  const [statisticsOptions, setStatisticsOptions] = useState({
-    countRowsCols: false,
-    uniqueValues: false,
-    basicStats: false,
-    detectNullsOutliers: false,
-    summaryVisualization: false,
-    exportAnalysis: false,
-  });
-
-  const toggleOption = (key: string) => {
-    setOptions((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
-  };
-
-  const toggleStatOption = (key: string) => {
-    setStatisticsOptions((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setFileName(file.name);
-    const reader = new FileReader();
-    const ext = file.name.split('.').pop()?.toLowerCase();
-
-    reader.onload = (e) => {
-      const content = e.target?.result;
-      let rawData: any[][] = [];
-
-      if (ext === 'csv') {
-        const parsed = Papa.parse(content as string, { skipEmptyLines: false });
-        rawData = parsed.data as any[][];
-      } else if (ext === 'xlsx' || ext === 'xls') {
-        const workbook = XLSX.read(content, { type: 'binary' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-      } else {
-        alert('Unsupported file type');
-        return;
-      }
-
-      let cleaned = [...rawData];
-      const trashRows: any[][] = [];
-
-      if (options.removeEmptyRows) {
-        cleaned = cleaned.filter((row) => {
-          const isEmpty = row.every((cell) => !cell || cell === '');
-          if (isEmpty) trashRows.push(row);
-          return !isEmpty;
-        });
-      }
-
-      if (options.removeDuplicates) {
-        const seen = new Set();
-        cleaned = cleaned.filter((row) => {
-          const key = JSON.stringify(row);
-          if (seen.has(key)) {
-            trashRows.push(row);
-            return false;
-          }
-          seen.add(key);
-          return true;
-        });
-      }
-
-      setData(cleaned);
-      setTrash(trashRows);
-    };
-
-    if (ext === 'xlsx' || ext === 'xls') {
-      reader.readAsBinaryString(file);
+  const handleOptionChange = (key: string, value: boolean | object) => {
+    if (key === 'analyzeStatistics' && typeof value === 'object') {
+      setOptions((prev) => ({
+        ...prev,
+        analyzeStatistics: {
+          ...prev.analyzeStatistics,
+          ...value
+        }
+      }))
     } else {
-      reader.readAsText(file);
+      setOptions((prev) => ({ ...prev, [key]: value }))
     }
-  };
+  }
 
-  const downloadFile = (content: any[][], name: string) => {
-    const worksheet = XLSX.utils.aoa_to_sheet(content);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
-    XLSX.writeFile(workbook, name);
-  };
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0]
+    if (selectedFile) setFile(selectedFile)
+  }
 
-  const handleDownload = () => {
-    if (data) downloadFile(data, `cleaned_${fileName}`);
-  };
+  const processFile = () => {
+    if (!file) return alert('Please select a file.')
 
-  const handleDownloadTrash = () => {
-    if (trash.length > 0) {
-      downloadFile(trash, `trash_${fileName}`);
-    }
-  };
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: false,
+      complete: async (result) => {
+        let data = result.data as any[]
+        const trash: any[] = []
+
+        const originalLength = data.length
+
+        if (options.removeDuplicates) {
+          const seen = new Set()
+          data = data.filter((row) => {
+            const key = JSON.stringify(row)
+            if (seen.has(key)) {
+              trash.push(row)
+              return false
+            }
+            seen.add(key)
+            return true
+          })
+        }
+
+        if (options.removeEmptyRows) {
+          data = data.filter((row) => {
+            const isEmpty = Object.values(row).every((val) => val === '')
+            if (isEmpty) trash.push(row)
+            return !isEmpty
+          })
+        }
+
+        if (options.removeEmptyColumns) {
+          const keys = Object.keys(data[0])
+          const nonEmptyKeys = keys.filter((key) =>
+            data.some((row) => row[key] !== '')
+          )
+          data = data.map((row) => {
+            const cleanedRow: any = {}
+            nonEmptyKeys.forEach((key) => (cleanedRow[key] = row[key]))
+            return cleanedRow
+          })
+        }
+
+        if (options.dropNulls) {
+          data = data.filter((row) => {
+            const hasNull = Object.values(row).some((val) => val === null || val === '')
+            if (hasNull) trash.push(row)
+            return !hasNull
+          })
+        }
+
+        const csv = Papa.unparse(data)
+
+        const zip = new JSZip()
+        zip.file('cleaned_data.csv', csv)
+
+        if (options.downloadTrash && trash.length > 0) {
+          const trashCsv = Papa.unparse(trash)
+          zip.file('trash.csv', trashCsv)
+        }
+
+        const blob = await zip.generateAsync({ type: 'blob' })
+        FileSaver.saveAs(blob, 'processed_data.zip')
+      }
+    })
+  }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Upload & Process Your File</h1>
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold mb-4">Upload and Process Your File</h1>
 
       <input
         type="file"
-        accept=".csv,.xlsx,.xls"
-        onChange={handleFileUpload}
+        accept=".csv"
+        onChange={handleFileChange}
         className="mb-4"
       />
 
       <div className="space-y-4 mb-6">
         <Checkbox
-          label="Remove Empty Rows"
-          checked={options.removeEmptyRows}
-          onChange={() => toggleOption('removeEmptyRows')}
-        />
-        <Checkbox
           label="Remove Duplicates"
           checked={options.removeDuplicates}
-          onChange={() => toggleOption('removeDuplicates')}
+          onChange={(val) => handleOptionChange('removeDuplicates', val)}
+        />
+        <Checkbox
+          label="Remove Empty Rows"
+          checked={options.removeEmptyRows}
+          onChange={(val) => handleOptionChange('removeEmptyRows', val)}
+        />
+        <Checkbox
+          label="Remove Empty Columns"
+          checked={options.removeEmptyColumns}
+          onChange={(val) => handleOptionChange('removeEmptyColumns', val)}
+        />
+        <Checkbox
+          label="Drop Nulls"
+          checked={options.dropNulls}
+          onChange={(val) => handleOptionChange('dropNulls', val)}
+        />
+        <Checkbox
+          label="Download Trash"
+          checked={options.downloadTrash}
+          onChange={(val) => handleOptionChange('downloadTrash', val)}
         />
         <Checkbox
           label="Analyze Statistics"
-          checked={options.analyzeStatistics}
-          onChange={() => toggleOption('analyzeStatistics')}
+          checked={options.analyzeStatistics.enabled}
+          onChange={(val) =>
+            handleOptionChange('analyzeStatistics', { enabled: val })
+          }
         />
-        {options.analyzeStatistics && (
-          <div className="ml-4 space-y-2 border-l pl-4">
+        {options.analyzeStatistics.enabled && (
+          <div className="ml-6 space-y-2">
             <Checkbox
-              label="Count Rows & Columns"
-              checked={statisticsOptions.countRowsCols}
-              onChange={() => toggleStatOption('countRowsCols')}
+              label="Total row/column count"
+              checked={options.analyzeStatistics.countRowsCols}
+              onChange={(val) =>
+                handleOptionChange('analyzeStatistics', { countRowsCols: val })
+              }
             />
             <Checkbox
-              label="Unique Values per Column"
-              checked={statisticsOptions.uniqueValues}
-              onChange={() => toggleStatOption('uniqueValues')}
+              label="Unique values per column"
+              checked={options.analyzeStatistics.uniqueValues}
+              onChange={(val) =>
+                handleOptionChange('analyzeStatistics', { uniqueValues: val })
+              }
             />
             <Checkbox
-              label="Basic Statistics (Mean, Median, etc.)"
-              checked={statisticsOptions.basicStats}
-              onChange={() => toggleStatOption('basicStats')}
+              label="Basic stats (mean, median, etc)"
+              checked={options.analyzeStatistics.statsSummary}
+              onChange={(val) =>
+                handleOptionChange('analyzeStatistics', { statsSummary: val })
+              }
             />
             <Checkbox
-              label="Detect Nulls & Outliers"
-              checked={statisticsOptions.detectNullsOutliers}
-              onChange={() => toggleStatOption('detectNullsOutliers')}
+              label="Nulls and outliers detection"
+              checked={options.analyzeStatistics.detectNullsOutliers}
+              onChange={(val) =>
+                handleOptionChange('analyzeStatistics', {
+                  detectNullsOutliers: val
+                })
+              }
             />
             <Checkbox
-              label="Summary Visualization"
-              checked={statisticsOptions.summaryVisualization}
-              onChange={() => toggleStatOption('summaryVisualization')}
+              label="Summary visualization"
+              checked={options.analyzeStatistics.showSummary}
+              onChange={(val) =>
+                handleOptionChange('analyzeStatistics', { showSummary: val })
+              }
             />
             <Checkbox
-              label="Export Analysis (.xlsx & .pdf)"
-              checked={statisticsOptions.exportAnalysis}
-              onChange={() => toggleStatOption('exportAnalysis')}
+              label="Export stats (.xlsx and .pdf)"
+              checked={options.analyzeStatistics.exportStats}
+              onChange={(val) =>
+                handleOptionChange('analyzeStatistics', { exportStats: val })
+              }
             />
           </div>
         )}
-        <Checkbox
-          label="Download Trash (Deleted Rows)"
-          checked={options.downloadTrash}
-          onChange={() => toggleOption('downloadTrash')}
-        />
       </div>
 
-      {data && (
-        <>
-          <div className="overflow-x-auto border mb-4">
-            <table className="min-w-full text-sm">
-              <tbody>
-                {data.slice(0, 10).map((row, i) => (
-                  <tr key={i} className="border-b">
-                    {row.map((cell, j) => (
-                      <td key={j} className="p-2 border-r">
-                        {typeof cell === 'object' ? JSON.stringify(cell) : cell}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Button className="mr-4" onClick={handleDownload}>Download Cleaned File</Button>
-          {options.downloadTrash && (
-            <Button variant="outline" onClick={handleDownloadTrash}>Download Trash</Button>
-          )}
-        </>
-      )}
+      <Button onClick={processFile}>Upload & Process</Button>
     </div>
-  );
+  )
 }
