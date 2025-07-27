@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const router = useRouter();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,18 +19,22 @@ export default function RegisterPage() {
     if (res.ok) {
       router.push('/login');
     } else {
-      alert('Error al registrar');
+      alert('Error al registrar usuario');
     }
   };
 
   return (
     <div>
-      <h2>Register</h2>
+      <h1>Registro</h1>
       <form onSubmit={handleRegister}>
-        <input type="email" placeholder="Email" onChange={(e) => setEmail(e.target.value)} required />
-        <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} required />
-        <button type="submit">Register</button>
+        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required />
+        <input type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} required />
+        <button type="submit">Registrarse</button>
       </form>
+
+      <p>
+        ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>
+      </p>
     </div>
   );
 }

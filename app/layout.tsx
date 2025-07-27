@@ -1,13 +1,13 @@
-import "../styles/globals.css";
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+// app/layout.tsx
+'use client';
 
-const inter = Inter({ subsets: ["latin"] });
+import '../styles/globals.css';
+import { Inter } from 'next/font/google';
+import { SessionProvider } from 'next-auth/react';
+import { dir } from 'i18next';
+import { i18n } from '../next-i18next.config';
 
-export const metadata: Metadata = {
-  title: "NewData",
-  description: "Upload, clean, analyze, and visualize your data like a pro.",
-};
+const inter = Inter({ subsets: ['latin'] });
 
 export default function RootLayout({
   children,
@@ -15,8 +15,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" dir={dir(i18n.defaultLocale)}>
+      <body className={inter.className}>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }

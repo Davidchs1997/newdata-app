@@ -1,217 +1,72 @@
-'use client'
-import React, { useState } from 'react'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Button } from '@/components/ui/button'
-import Papa from 'papaparse'
-import JSZip from 'jszip'
-import FileSaver from 'file-saver'
+'use client';
+
+import { useState } from 'react';
 
 export default function UploadPage() {
-  const [file, setFile] = useState<File | null>(null)
-  const [options, setOptions] = useState({
-    removeDuplicates: false,
-    removeEmptyRows: false,
-    removeEmptyColumns: false,
-    dropNulls: false,
-    downloadTrash: false,
-    analyzeStatistics: {
-      enabled: false,
-      countRowsCols: false,
-      uniqueValues: false,
-      statsSummary: false,
-      detectNullsOutliers: false,
-      showSummary: false,
-      exportStats: false
-    },
-    generateCharts: false,
-    normalizeData: false,
-    encodeCategorical: false,
-    transformText: false
-  })
-
-  const handleOptionChange = (key: string, value: boolean | object) => {
-    if (key === 'analyzeStatistics' && typeof value === 'object') {
-      setOptions((prev) => ({
-        ...prev,
-        analyzeStatistics: {
-          ...prev.analyzeStatistics,
-          ...value
-        }
-      }))
-    } else {
-      setOptions((prev) => ({ ...prev, [key]: value }))
-    }
-  }
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
-    if (selectedFile) setFile(selectedFile)
-  }
+    setSelectedFile(e.target.files?.[0] || null);
+    setUploadStatus(null);
+    setDownloadUrl(null);
+  };
 
-  const processFile = () => {
-    if (!file) return alert('Please select a file.')
+  const handleUpload = async () => {
+    if (!selectedFile) return;
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: false,
-      complete: async (result) => {
-        let data = result.data as any[]
-        const trash: any[] = []
+    const formData = new FormData();
+    formData.append('file', selectedFile);
 
-        const originalLength = data.length
+    setUploadStatus('Uploading...');
 
-        if (options.removeDuplicates) {
-          const seen = new Set()
-          data = data.filter((row) => {
-            const key = JSON.stringify(row)
-            if (seen.has(key)) {
-              trash.push(row)
-              return false
-            }
-            seen.add(key)
-            return true
-          })
-        }
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-        if (options.removeEmptyRows) {
-          data = data.filter((row) => {
-            const isEmpty = Object.values(row).every((val) => val === '')
-            if (isEmpty) trash.push(row)
-            return !isEmpty
-          })
-        }
-
-        if (options.removeEmptyColumns) {
-          const keys = Object.keys(data[0])
-          const nonEmptyKeys = keys.filter((key) =>
-            data.some((row) => row[key] !== '')
-          )
-          data = data.map((row) => {
-            const cleanedRow: any = {}
-            nonEmptyKeys.forEach((key) => (cleanedRow[key] = row[key]))
-            return cleanedRow
-          })
-        }
-
-        if (options.dropNulls) {
-          data = data.filter((row) => {
-            const hasNull = Object.values(row).some((val) => val === null || val === '')
-            if (hasNull) trash.push(row)
-            return !hasNull
-          })
-        }
-
-        const csv = Papa.unparse(data)
-
-        const zip = new JSZip()
-        zip.file('cleaned_data.csv', csv)
-
-        if (options.downloadTrash && trash.length > 0) {
-          const trashCsv = Papa.unparse(trash)
-          zip.file('trash.csv', trashCsv)
-        }
-
-        const blob = await zip.generateAsync({ type: 'blob' })
-        FileSaver.saveAs(blob, 'processed_data.zip')
+      if (res.ok) {
+        const data = await res.json();
+        setUploadStatus('File uploaded successfully!');
+        setDownloadUrl(data.filePath); // Ruta desde la API
+      } else {
+        const error = await res.text();
+        setUploadStatus(`Upload failed: ${error}`);
       }
-    })
-  }
+    } catch (err: any) {
+      setUploadStatus(`Upload failed: ${err.message}`);
+    }
+  };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-4">Upload and Process Your File</h1>
-
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <h1 className="text-3xl font-bold mb-6">Upload File</h1>
       <input
         type="file"
-        accept=".csv"
         onChange={handleFileChange}
         className="mb-4"
       />
+      <button
+        onClick={handleUpload}
+        disabled={!selectedFile}
+        className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+      >
+        Upload
+      </button>
 
-      <div className="space-y-4 mb-6">
-        <Checkbox
-          label="Remove Duplicates"
-          checked={options.removeDuplicates}
-          onChange={(val) => handleOptionChange('removeDuplicates', val)}
-        />
-        <Checkbox
-          label="Remove Empty Rows"
-          checked={options.removeEmptyRows}
-          onChange={(val) => handleOptionChange('removeEmptyRows', val)}
-        />
-        <Checkbox
-          label="Remove Empty Columns"
-          checked={options.removeEmptyColumns}
-          onChange={(val) => handleOptionChange('removeEmptyColumns', val)}
-        />
-        <Checkbox
-          label="Drop Nulls"
-          checked={options.dropNulls}
-          onChange={(val) => handleOptionChange('dropNulls', val)}
-        />
-        <Checkbox
-          label="Download Trash"
-          checked={options.downloadTrash}
-          onChange={(val) => handleOptionChange('downloadTrash', val)}
-        />
-        <Checkbox
-          label="Analyze Statistics"
-          checked={options.analyzeStatistics.enabled}
-          onChange={(val) =>
-            handleOptionChange('analyzeStatistics', { enabled: val })
-          }
-        />
-        {options.analyzeStatistics.enabled && (
-          <div className="ml-6 space-y-2">
-            <Checkbox
-              label="Total row/column count"
-              checked={options.analyzeStatistics.countRowsCols}
-              onChange={(val) =>
-                handleOptionChange('analyzeStatistics', { countRowsCols: val })
-              }
-            />
-            <Checkbox
-              label="Unique values per column"
-              checked={options.analyzeStatistics.uniqueValues}
-              onChange={(val) =>
-                handleOptionChange('analyzeStatistics', { uniqueValues: val })
-              }
-            />
-            <Checkbox
-              label="Basic stats (mean, median, etc)"
-              checked={options.analyzeStatistics.statsSummary}
-              onChange={(val) =>
-                handleOptionChange('analyzeStatistics', { statsSummary: val })
-              }
-            />
-            <Checkbox
-              label="Nulls and outliers detection"
-              checked={options.analyzeStatistics.detectNullsOutliers}
-              onChange={(val) =>
-                handleOptionChange('analyzeStatistics', {
-                  detectNullsOutliers: val
-                })
-              }
-            />
-            <Checkbox
-              label="Summary visualization"
-              checked={options.analyzeStatistics.showSummary}
-              onChange={(val) =>
-                handleOptionChange('analyzeStatistics', { showSummary: val })
-              }
-            />
-            <Checkbox
-              label="Export stats (.xlsx and .pdf)"
-              checked={options.analyzeStatistics.exportStats}
-              onChange={(val) =>
-                handleOptionChange('analyzeStatistics', { exportStats: val })
-              }
-            />
-          </div>
-        )}
-      </div>
+      {uploadStatus && <p className="mt-4">{uploadStatus}</p>}
 
-      <Button onClick={processFile}>Upload & Process</Button>
+      {downloadUrl && (
+        <a
+          href={downloadUrl}
+          download
+          className="mt-4 text-blue-500 underline"
+        >
+          Download File
+        </a>
+      )}
     </div>
-  )
+  );
 }

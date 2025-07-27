@@ -1,0 +1,10 @@
+{
+  "welcome": "Bienvenido a NewData",
+  "go_to_upload": "Ir a la página de subida",
+  "upload_title": "Sube y selecciona opciones",
+  "remove_duplicates": "Eliminar duplicados",
+  "remove_empty_rows": "Eliminar filas vacías",
+  "analyze_statistics": "Analizar estadísticas",
+  "download_trash": "Descargar eliminados",
+  "submit": "Procesar"
+}

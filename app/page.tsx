@@ -1,23 +1,17 @@
-'use client'
-import React from "react";
+"use client";
+
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 export default function Home() {
+  const { t } = useTranslation();
+
   return (
-    <main
-      className="flex min-h-screen flex-col items-center justify-center p-8 bg-cover bg-center"
-      style={{ backgroundImage: "url('/bg-analyst.jpg')" }}
-    >
-      <div className="bg-white bg-opacity-80 rounded-2xl p-10 shadow-xl max-w-3xl text-center">
-        <h1 className="text-4xl font-bold mb-4">NewData: Your Virtual Data Analyst</h1>
-        <p className="text-lg mb-6">
-          Upload your data and let our smart assistant clean, analyze, and visualize it like a senior data analyst would.
-        </p>
-        <Link href="/upload">
-          <Button className="text-lg px-6 py-3">Get Started</Button>
-        </Link>
-      </div>
+    <main className="flex min-h-screen flex-col items-center justify-center p-24">
+      <h1 className="text-4xl font-bold mb-4">{t("welcome")}</h1>
+      <Link href="/upload" className="text-blue-500 hover:underline text-xl">
+        {t("go_to_upload")}
+      </Link>
     </main>
   );
 }

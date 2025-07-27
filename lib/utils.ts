@@ -1,3 +1,3 @@
-export function cn(...classes: (string | undefined | false | null)[]) {
-  return classes.filter(Boolean).join(" ");
+export function formatDate(date: Date): string {
+  return date.toISOString().split("T")[0];
 }
