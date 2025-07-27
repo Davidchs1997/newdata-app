@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, readFile } from "fs/promises";
+import { writeFile, readFile, mkdir } from "fs/promises"; // ✅ mkdir agregado aquí
 import { parse } from "csv-parse/sync";
 import { stringify } from "csv-stringify/sync";
 import * as XLSX from "xlsx";
@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
   const newWorkbook = XLSX.utils.book_new();
   const newSheet = XLSX.utils.json_to_sheet(cleanedData);
   XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Cleaned");
-  await mkdir(outputPath, { recursive: true });
+
+  await mkdir(outputPath, { recursive: true }); // ✅ mkdir corregido
+
   XLSX.writeFile(newWorkbook, outputFile);
 
   return NextResponse.json({ cleanedFilePath: outputFile });
