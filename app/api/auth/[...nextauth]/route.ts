@@ -20,4 +20,5 @@ const handler = NextAuth({
   },
 });
 
+// Exporta los métodos GET y POST para que Next.js los reconozca
 export { handler as GET, handler as POST };
