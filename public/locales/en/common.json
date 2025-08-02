@@ -1,0 +1,10 @@
+{
+  "upload": "Upload your dataset",
+  "logout": "Logout",
+  "removeEmptyRows": "Remove empty rows",
+  "removeDuplicates": "Remove duplicates",
+  "analyzeStats": "Analyze statistics",
+  "downloadTrash": "Download Trash",
+  "generateCharts": "Generate Charts",
+  "transformData": "Transform Data"
+}

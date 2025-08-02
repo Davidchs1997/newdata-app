@@ -1,0 +1,10 @@
+{
+  "upload": "Sube tu archivo de datos",
+  "logout": "Cerrar sesión",
+  "removeEmptyRows": "Eliminar filas vacías",
+  "removeDuplicates": "Eliminar duplicados",
+  "analyzeStats": "Analizar estadísticas",
+  "downloadTrash": "Descargar eliminados",
+  "generateCharts": "Generar gráficos",
+  "transformData": "Transformar datos"
+}
